@@ -8,7 +8,7 @@ networks:
 
 services:
   kong-migrations:
-    image: "${KONG_DOCKER_TAG:-kong:latest}"
+    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.4.0-ubuntu}"
     command: kong migrations bootstrap
     depends_on:
       db:
@@ -24,7 +24,7 @@ services:
     restart: on-failure
 
   kong-migrations-up:
-    image: "${KONG_DOCKER_TAG:-kong:latest}"
+    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.4.0-ubuntu}"
     command: kong migrations up && kong migrations finish
     depends_on:
       db:
@@ -40,7 +40,7 @@ services:
     restart: on-failure
 
   kong:
-    image: "${KONG_DOCKER_TAG:-kong:latest}"
+    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.4.0-ubuntu}"
     user: "${KONG_USER:-root}"
     depends_on:
       db:
@@ -57,6 +57,8 @@ services:
       KONG_PG_USER: ${KONG_PG_USER:-kong}
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_PLUGINS: "bundled,oidc"
+      KONG_LOG_LEVEL: debug
     networks:
       - kong-net
     ports:
@@ -70,7 +72,7 @@ services:
       timeout: 10s
       retries: 10
     restart: on-failure
-    
+
   db:
     image: postgres:9.5
     environment:
@@ -89,3 +91,44 @@ services:
       - kong-net
     volumes:
       - kong_data:/var/lib/postgresql/data
+
+  #######################################
+  # Konga database prepare
+  #######################################
+  konga-prepare:
+    image: pantsel/konga:next
+    command: "-c prepare -a postgres -u postgresql://${KONG_PG_USER:-kong}:${KONG_PG_PASSWORD:-kong}@db:5432/${KONG_PG_DATABASE:-kong}"
+    environment:
+      DB_ADAPTER: postgres
+      DB_HOST: db
+      DB_USER: ${KONG_PG_USER:-kong}
+      DB_PASSWORD: ${KONG_PG_PASSWORD:-kong}
+      DB_DATABASE: ${KONG_PG_DATABASE:-kong}
+      NODE_ENV: production
+    networks:
+      - kong-net
+    restart: on-failure
+    links:
+      - db
+    depends_on:
+      - db
+
+  #######################################
+  # Konga: Kong GUI
+  #######################################
+  konga:
+    image: pantsel/konga:next
+    restart: always
+    networks:
+        - kong-net
+    environment:
+      DB_ADAPTER: postgres
+      DB_HOST: db
+      DB_USER: ${KONG_PG_USER:-kong}
+      DB_PASSWORD: ${KONG_PG_PASSWORD:-kong}
+      DB_DATABASE: ${KONG_PG_DATABASE:-kong}
+      NODE_ENV: production
+    depends_on:
+      - db
+    ports:
+      - "1337:1337"
