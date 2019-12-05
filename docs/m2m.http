@@ -1,0 +1,66 @@
+@domain = app.lvh.voronenko.net
+@domain_endpoint = http://app.lvh.voronenko.net:8000
+
+@contentType = application/json
+@createdAt = {{$datetime iso8601}}
+@modifiedBy = {{$processEnv USERNAME}}
+
+@companyname = voronenko
+
+@kong = http://localhost:8001
+
+@m2mservice_name = m2mservice
+
+@jwtservicename = example-service-m2m
+@jwttesturi =direct
+
+### create direct route service
+
+curl -i -X POST \
+--url {{ kong }}/services/ \
+--data 'name={{ m2mservice_name }}' \
+--data 'url=https://httpbin.org/get'
+
+###  Create direct route
+curl -i -X POST \
+--url {{ kong }}/services/{{ m2mservice_name }}/routes \
+--data 'hosts[]={{domain}}&paths[]=/direct'
+
+### check route is up
+curl --request GET \
+  --url {{ domain_endpoint }}/direct
+
+### Activate jwt plugin for service
+
+curl -i -X POST \
+  --url {{kong}}/services/{{ m2mservice_name }}/plugins/ \
+  --data 'name=jwt'
+
+### consume direct route
+curl --request GET \
+  --url http://example.com:8000/direct
+
+###
+
+###
+@auth0consumer=auth0voronenko
+@pubkeyname={{companyname}}.pub
+
+curl -i -X POST \
+  --url http://localhost:8001/consumers/ \
+  --data "username={{auth0consumer}}&custom_id=someid2"
+
+
+### Now time to test the api
+
+# @name accessTokenRequest
+curl --request POST \
+  --url https://{{companyname}}.auth0.com/oauth/token \
+  --header 'content-type: application/json' \
+  --data '{"client_id":"R477zd0dhD0Hq3CnNIEgE677nwboYD5u","client_secret":"Omps9OmF5j_gNJBfc6byC3i6YuokRhVxtUG3THzEpKtOau8mgq9qAUZ6FxhxIHm2","audience":"https://implicitgrant.auth0.voronenko.net","grant_type":"client_credentials"}'
+
+###
+@accessToken = {{accessTokenRequest.response.body.$.access_token}}
+
+GET {{domain_endpoint}}/direct
+authorization: Bearer {{accessToken}}

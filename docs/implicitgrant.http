@@ -1,0 +1,49 @@
+@domain = app.lvh.voronenko.net
+@domain_endpoint = http://app.lvh.voronenko.net:8000
+
+@contentType = application/json
+@createdAt = {{$datetime iso8601}}
+@modifiedBy = {{$processEnv USERNAME}}
+
+@companyname = voronenko
+
+@kong = http://localhost:8001
+
+@spaservice_name = spaservice
+
+@jwtservicename = example-service-m2m
+@jwttesturi =direct
+
+
+# Can be obtained at application settings page
+@spa_client_id=Duz71pNGTg8RH7hwy0nrqy1DUGXyr2sy
+@spa_client_secret=w06r1bAyufGszfdpicRGerNJ9g2bTC2abV0j-9ihgHqPNGd3Gs-ua0-lRGyGKfnb
+# discovery url is fixed
+@spa_discovery=https://{{ companyname }}.auth0.com/.well-known/openid-configuration
+
+### Create service
+curl -i -X POST \
+--url {{ kong }}/services/ \
+--data 'name={{ spaservice_name }}' \
+--data 'url=https://httpbin.org/get'
+
+### Create route
+curl -i -X POST \
+--url {{ kong }}/services/{{ spaservice_name }}/routes \
+--data 'hosts[]={{domain}}&paths[]=/spa/&paths[]=/spa'
+
+
+### Check route accessible
+curl --request GET \
+  --url http://app.lvh.voronenko.net:8000/spa/
+
+### Let's protect service with oidc plugin
+
+curl -i -X POST \
+--url {{ kong }}/services/{{ spaservice_name }}/plugins \
+--data 'name=oidc&&config.client_id={{ spa_client_id }}&config.client_secret={{ spa_client_secret }}&config.discovery={{ spa_discovery }}'
+
+### Check route now
+GET {{domain_endpoint}}/spa/
+
+

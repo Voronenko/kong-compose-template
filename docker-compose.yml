@@ -46,26 +46,32 @@ services:
       db:
         condition: service_healthy
     environment:
-      KONG_ADMIN_ACCESS_LOG: /dev/stdout
-      KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: '0.0.0.0:8001'
-      KONG_CASSANDRA_CONTACT_POINTS: db
       KONG_DATABASE: postgres
-      KONG_PG_DATABASE: ${KONG_PG_DATABASE:-kong}
       KONG_PG_HOST: db
+      KONG_PG_PORT: 5432
+      KONG_PG_DATABASE: ${KONG_PG_DATABASE:-kong}
       KONG_PG_PASSWORD: ${KONG_PG_PASSWORD:-kong}
       KONG_PG_USER: ${KONG_PG_USER:-kong}
+
       KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG:  /dev/stderr
+      KONG_ADMIN_ERROR_LOG:  /dev/stderr
+
+      KONG_PROXY_LISTEN:     0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_ADMIN_LISTEN:     0.0.0.0:8001, 0.0.0.0:8444 ssl
+
+      KONG_CASSANDRA_CONTACT_POINTS: db
+
       KONG_PLUGINS: "bundled,oidc"
       KONG_LOG_LEVEL: debug
     networks:
       - kong-net
     ports:
-      - "8000:8000/tcp"
-      - "8001:8001/tcp"
-      - "8443:8443/tcp"
-      - "8444:8444/tcp"
+      - "8000:8000/tcp" # Listener
+      - "8001:8001/tcp" # Admin API
+      - "8443:8443/tcp" # Listener  (SSL)
+      - "8444:8444/tcp" # Admin API (SSL)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s
