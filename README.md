@@ -20,6 +20,9 @@ Kong's documentation can be found at [https://docs.konghq.com/][kong-docs-url].
 
 Additionally, compose file contains kong ui, sa called konga https://github.com/pantsel/konga,  available at port 1337
 
+For Konga you can use some admin name (kind of Slavko / KongaKong) with unique connection name kongakompose and admin endpoint
+http://kong:8001/
+
 # Integrating with Auth0
 
 ## Web application (interactive login via browser UI)
@@ -251,6 +254,8 @@ curl -i -X POST \
   --data "username={{auth0consumer}}&custom_id=someid2"
 ```
 
+![alt](docs/06_kong_auth0_consumer.png)
+
 and specify `jwt` method of the authentication for him:
 
 ```
@@ -263,6 +268,8 @@ curl -i -X POST http://localhost:8001/consumers/${CONSUMERNAME}/jwt \
     -F "rsa_public_key=@./${COMPANYNAME}.pub" \
     -F "key=https://${COMPANYNAME}.auth0.com/"
 ```
+
+![alt](docs/07_kong_auth0_consumer_jwt_key.png)
 
 At that moment we are ready to consume our api behind kong.
 
@@ -326,3 +333,122 @@ Additionally. we get bunch of headers:
 ```
 
 and later consumed by our API.
+
+
+## Extending Autho metadata
+
+
+### Hooks
+
+For M2M applications in difference to web based applications, where custom attributes can be injected via rules, point of extension are hooks.
+
+Related documentation: https://auth0.com/docs/hooks
+
+Take a look on a example below representing dummy `Client Credentials Exchange` hook extending access_token with additional keypair
+`'https://foo.com/claim'`:`bar` and `somehookattr`:`somehookattrvalue`
+
+```js
+
+/**
+@param {object} client - information about the client
+@param {string} client.name - name of client
+@param {string} client.id - client id
+@param {string} client.tenant - Auth0 tenant name
+@param {object} client.metadata - client metadata
+@param {array|undefined} scope - array of strings representing the scope claim or undefined
+@param {string} audience - token's audience claim
+@param {object} context - additional authorization context
+@param {object} context.webtask - webtask context
+@param {function} cb - function (error, accessTokenClaims)
+*/
+module.exports = function(client, scope, audience, context, cb) {
+  var access_token = {};
+  access_token.scope = scope;
+
+  // Modify scopes or add extra claims
+  // access_token['https://example.com/claim'] = 'bar';
+  // access_token.scope.push('extra');
+  //client.metadata['yourcustomattrs'] = ['someattr3h', 'someattr4h'];
+  //client.metadata.yourcustomattrs = ['someattr1h', 'someattr2h'];
+  access_token['https://foo.com/claim'] = 'bar';
+  access_token['https://foo.com/somehookattr'] = 'somehookattrvalue';
+  access_token['somehookattr'] = 'somehookattrvalue';
+  cb(null, access_token);
+};
+
+```
+
+upon issuing request for token
+
+```shell
+
+curl --request POST \
+  --url https://{{companyname}}.auth0.com/oauth/token \
+  --header 'content-type: application/json' \
+  --data '{"client_id":"R477zd0dhD0Hq3CnNIEgE677nwboYD5u","client_secret":"Omps9OmF5j_gNJBfc6byC3i6YuokRhVxtUG3THzEpKtOau8mgq9qAUZ6FxhxIHm2","audience":"https://implicitgrant.auth0.voronenko.net","grant_type":"client_credentials"}'
+
+```
+
+we receive following response
+
+```
+HTTP/1.1 200 OK
+Date: Mon, 06 Jan 2020 11:58:45 GMT
+Content-Type: application/json
+Content-Length: 883
+Connection: close
+Server: nginx
+ot-tracer-spanid: 19efb150187ac510
+ot-tracer-traceid: 01032ad94083ad4d
+ot-tracer-sampled: true
+X-Auth0-RequestId: c629c3e05e0881e81315
+X-RateLimit-Limit: 30
+X-RateLimit-Remaining: 29
+X-RateLimit-Reset: 1578311926
+Cache-Control: no-store
+Pragma: no-cache
+Strict-Transport-Security: max-age=15724800
+X-Robots-Tag: noindex, nofollow, nosnippet, noarchive
+
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6IlF6bEZOak5CUmtZNVJqY3lOVVpCUmpJMU5qRkJOMFl4T0VNMVJFSXhNelU0TVVJeU5qa3dSUSJ9.eyJodHRwczovL2Zvby5jb20vY2xhaW0iOiJiYXIiLCJodHRwczovL2Zvby5jb20vc29tZWhvb2thdHRyIjoic29tZWhvb2thdHRydmFsdWUiLCJpc3MiOiJodHRwczovL3Zvcm9uZW5rby5hdXRoMC5jb20vIiwic3ViIjoiUjQ3N3pkMGRoRDBIcTNDbk5JRWdFNjc3bndib1lENXVAY2xpZW50cyIsImF1ZCI6Imh0dHBzOi8vaW1wbGljaXRncmFudC5hdXRoMC52b3JvbmVua28ubmV0IiwiaWF0IjoxNTc4MzEyMTM4LCJleHAiOjE1NzgzOTg1MzgsImF6cCI6IlI0Nzd6ZDBkaEQwSHEzQ25OSUVnRTY3N253Ym9ZRDV1IiwiZ3R5IjoiY2xpZW50LWNyZWRlbnRpYWxzIn0.zwpoOLe93yTt9dXidsVfBPCujsOdC37dHGpxBepU0vEJ4hLB0PiKOgpHd6XCr4VqaZWshlCtyGgS7xUNHjvg7RyIOn8AyXXX2q2FRVkStXNB7p88HizF79dENLfX5jSDqpHMLiP7F1FjMlzCpLnB9x4NCR_vIt4HQDj5lOqI7B55q1gx7UKSzY1qgMzm1U8rl8BsA9tFoEMfMwEvhtHhVXdijo_-XbLkjmX-646V_Fl2bJUpkneZF5ZDR-lbh7qfp995UwpQBRqVfNhupOUP1_OyeOm19VP8ka0RBRdYhQGkSwSsFGQ07kHbe0md-d9fIO-AJYimaci37QvlTYQAXQ",
+  "expires_in": 86400,
+  "token_type": "Bearer"
+}
+
+```
+
+Using debugger at jwt.io lets decode payload
+
+```json
+
+{
+  "https://foo.com/claim": "bar",
+  "https://foo.com/somehookattr": "somehookattrvalue",
+  "iss": "https://voronenko.auth0.com/",
+  "sub": "R477zd0dhD0Hq3CnNIEgE677nwboYD5u@clients",
+  "aud": "https://implicitgrant.auth0.voronenko.net",
+  "iat": 1578312138,
+  "exp": 1578398538,
+  "azp": "R477zd0dhD0Hq3CnNIEgE677nwboYD5u",
+  "gty": "client-credentials"
+}
+
+```
+
+Important: note, that extension attributes passed via custom namespaced
+uri was allowed, while un-namespaced custom attribute `somehookattr` was
+stripped out from the payload.
+
+
+## Known issues
+
+### No credentials found for given 'iss'
+
+Please check, that `iss` returned in token payload,
+should match to key field of the jwt token
+
+In example above, `"iss": "https://voronenko.auth0.com/"` matches
+to key attribute of the jwt key.
+
+![alt](docs/07_kong_auth0_consumer_jwt_key.png)
