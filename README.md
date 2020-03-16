@@ -23,18 +23,51 @@ Additionally, compose file contains kong ui, sa called konga https://github.com/
 For Konga you can use some admin name (kind of Slavko / KongaKong) with unique connection name kongakompose and admin endpoint
 http://kong:8001/
 
+# Introduction
+
+I used to work with several startups recently. Authentication is present in any product you do. Authentication is not simple. Not hard in the development sense — well-defined standards such as OAuth2 are complete, extensively documented and supported by an ecosystem of tooling.
+
+Rather, authentication is hard to get right. There are number of limitations like time constraints, product owner concentrated on other features, budget constraints and so on. If you have some
+previously developed user subsystem which evolves from project
+to project - that is cool. Otherwise you are about to start yet another authentication subsystem for your project. Story starts...
+Stored your passwords as an MD5 hash instead of, saying, using bcrypt and salt — tadamm. Didn’t force HTTP Strict Transport Security (HSTS) and get down-grade tadamm. Rookie mistakes, few
+sprints to polish.
+
+But what if short term you need to comply with some of the security
+standarts, like ISO27001/ISO27018, SOC II, HIPAA, PCI DSS etc?
+Implementation time grows while you need to implement your MVP instead.
+
+So auth0 is authentication as a service solution, which offloads
+your pain with authentication for a while, and allows to delay your
+own implementation, while immediately start using your application with robust authentication approach.
+
+API gateway. The same situation in a modern world. You want to have
+lightweight api, so you want to offload number of checks to some middleware while keep solution as modular as possible. Most of the
+major cloud providers have their solution (like AWS API gateway),
+but if you want to stay provider independent you again have less choices - either implement api gateway on your own, or use some opensource solution. Here comes kong - makes connecting APIs and microservices across hybrid or multi-cloud environments easier and faster. Not, that Kong gateway is the open source API gateway, built for multi-cloud and hybrid, and optimized for microservices and distributed architectures.  It is built on top of a lightweight proxy(nginx + lua) to deliver unparalleled latency, performance and scalability for all your microservice applications regardless of where they run. It also allows flexibility by introducing granular control over your traffic with Kong’s plugin architecture.
+
+Often you have situation, when you have separate api gateway,
+optional separate client portal and delegated authentication to auth0...  And here comes purpose of this article - illustrate
+proof of concept of combining Auth0, Kong and your portal in one
+architecture. Unfortunately, by this time in number of situations - swiss knife of proven plugins is needed to make kong to work nicely
+in a non-standard architecture solutions.
+
 # Integrating with Auth0
 
-## Web application (interactive login via browser UI)
+Generally, there are two possible flows: you are going to consume services interactively from some web portal - in that scenario customer logs on it's own and consumes api directy from api gateway, or your api are about to be consumed on your serverside and then proxied to client of the your portal.
 
-This flow supposes, that API accessible through kong will be consumed by some browser application, while user management and authorization is delegated to some
-third party service, in our case Auth0. To accomplish this, one of the Nokia teams implemented plugin `kong-oidc` available at https://github.com/nokia/kong-oidc.
-This plugin should be preinstalled on a kong machine and activated.
+Let's review both approaches.
 
-In our example we use docker, thus we will use slightly modified kong image:
+## Web application (interactive customer login to api gateway via browser UI)
+
+This flow supposes, that API accessible through kong will be consumed by some browser application, while user management and authorization is delegated to some openid2 compatible third party service, in our case Auth0.
+
+To accomplish this, one of the Nokia teams implemented plugin `kong-oidc` available at https://github.com/nokia/kong-oidc.
+kong-oidc is a plugin for Kong implementing the OpenID Connect Relying Party (RP) functionality.
+
+This plugin should be preinstalled on a kong mproxy
 
 ```
-FROM kong:1.4.0-ubuntu
 LABEL description="Ubuntu + Kong 1.4.0 + kong-oidc plugin"
 RUN luarocks install kong-oidc
 ```
@@ -45,16 +78,33 @@ On Auth0 interface lets create SPA application.
 
 For further ideas, check advanced settings, and ensure that you can add up to 10 255 byte long custom value pairs, that will be later passed to your api behind kong.
 
-Also recall that, there is Rules section,  where you can implement number of javascript
+In most of situations, you would like to pass some application specific info from your authentication provider to your api endpoint.
+To accomplish this, Auth0 has rules concept, on a UI you can find Rules section,  where you can implement number of javascript
 routines with custom logic, that may add number of realtime parameters to the request passed.
 
 ```js
 function (user, context, callback) {
-
+  user.user_metadata = user.user_metadata || {};
+  user.user_metadata.color = user.user_metadata.color || 'blue';
+  context.idToken['https://example.com/favorite_color'] = user.user_metadata.color;
   context.idToken.yourcustomattrs = ['someattr1', 'someattr2'];
-  return callback(null, user, context);
+  context.idToken['https://example.com/yourcustomattrs'] = {
+    objectattr1: "objectvalue1",
+    objectattr2: "objectvalue2",
+    objectattr3: "objectvalue3"
+  };
+
+  auth0.users.updateUserMetadata(user.user_id, user.user_metadata)
+    .then(function(){
+        callback(null, user, context);
+    })
+    .catch(function(err){
+        callback(err);
+    });
 }
 ```
+In a example above note, that any additional parameters should follow
+uri scheme, in other case they will not be passed downstream (`someattr1`, `someattr2`) in snippet above.
 
 In that scenario you will have some web application running at some domain.  Let's assume,
 it is http://app.lvh.voronenko.net/  - it has some custom portal logic, but also consumes data from microservices hosted behind kong, running at endpoint  http://app.lvh.voronenko.net:8000/
@@ -83,8 +133,7 @@ curl -i -X POST \
 --data 'hosts[]={{domain}}&paths[]=/spa/'
 ```
 
-If everything ok, you should get at /spa/ endpoint copy of the enchanced
-request received.
+If everything ok, you should get at /spa/ endpoint copy of the enchanced request received.
 
 ```
 HTTP/1.1 200 OK
@@ -105,7 +154,7 @@ Via: kong/1.4.0
 ```
 
 Now lets protect our endpoind with auth0 authentication.
-We will need to get three additional parameters:
+We will need to get three additional parameters: client id, client secret and discovery file. All can be obtained directly from auth0.
 
 ```
 # Can be obtained at application settings page
@@ -114,6 +163,88 @@ We will need to get three additional parameters:
 # discovery url is fixed
 @spa_discovery=https://{{ companyname }}.auth0.com/.well-known/openid-configuration
 ```
+
+If you open spa discovery url, you will find, generally, "contract" supported by authenticatio provider, auth0
+
+
+```json
+{
+  "issuer": "https://voronenko.auth0.com/",
+  "authorization_endpoint": "https://voronenko.auth0.com/authorize",
+  "token_endpoint": "https://voronenko.auth0.com/oauth/token",
+  "userinfo_endpoint": "https://voronenko.auth0.com/userinfo",
+  "mfa_challenge_endpoint": "https://voronenko.auth0.com/mfa/challenge",
+  "jwks_uri": "https://voronenko.auth0.com/.well-known/jwks.json",
+  "registration_endpoint": "https://voronenko.auth0.com/oidc/register",
+  "revocation_endpoint": "https://voronenko.auth0.com/oauth/revoke",
+  "scopes_supported": [
+    "openid",
+    "profile",
+    "offline_access",
+    "name",
+    "given_name",
+    "family_name",
+    "nickname",
+    "email",
+    "email_verified",
+    "picture",
+    "created_at",
+    "identities",
+    "phone",
+    "address"
+  ],
+  "response_types_supported": [
+    "code",
+    "token",
+    "id_token",
+    "code token",
+    "code id_token",
+    "token id_token",
+    "code token id_token"
+  ],
+  "code_challenge_methods_supported": [
+    "S256",
+    "plain"
+  ],
+  "response_modes_supported": [
+    "query",
+    "fragment",
+    "form_post"
+  ],
+  "subject_types_supported": [
+    "public"
+  ],
+  "id_token_signing_alg_values_supported": [
+    "HS256",
+    "RS256"
+  ],
+  "token_endpoint_auth_methods_supported": [
+    "client_secret_basic",
+    "client_secret_post"
+  ],
+  "claims_supported": [
+    "aud",
+    "auth_time",
+    "created_at",
+    "email",
+    "email_verified",
+    "exp",
+    "family_name",
+    "given_name",
+    "iat",
+    "identities",
+    "iss",
+    "name",
+    "nickname",
+    "phone_number",
+    "picture",
+    "sub"
+  ],
+  "request_uri_parameter_supported": false,
+  "device_authorization_endpoint": "https://voronenko.auth0.com/oauth/device/code"
+}
+```
+
 
 Let's associate plugin with the service
 
@@ -145,7 +276,7 @@ Upon successful login we are redirected back to kong, and now
   "args": {},
   "headers": {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
-    "Accept-Encoding": "gzip, deflate", 
+    "Accept-Encoding": "gzip, deflate",
     "Accept-Language": "en-US,en;q=0.9,ru-UA;q=0.8,ru;q=0.7,uk;q=0.6",
     "Cookie": "session=UHH45jCV9A87Aev2IEBCJA..|1575582049|4Kc2 ... .",
     "Dnt": "1",
@@ -153,7 +284,7 @@ Upon successful login we are redirected back to kong, and now
     "Upgrade-Insecure-Requests": "1",
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
     "X-Forwarded-Host": "app.lvh.voronenko.net",
-    "X-Userinfo": "eyJuaWNrbmFtZSI6ImF2aXNiaXJkIiwiaWQiOiJnb29nbGUtb2F1dGgyfDEwMjE2MTg5MzYxMDUxMzg5MDczMyIsImxvY2FsZSI6ImVuIiwibmFtZSI6IlZ5YWNoZXNsYXYgViIsImVtYWlsIjoiYXZpc2JpcmRAZ21haWwuY29tIiwiZ2l2ZW5fbmFtZSI6IlZ5YWNoZXNsYXYiLCJ1cGRhdGVkX2F0IjoiMjAxOS0xMi0wNVQyMDo1NToyMS4wNThaIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpY3R1cmUiOiJodHRwczpcL1wvbGg0Lmdvb2dsZXVzZXJjb250ZW50LmNvbVwvLXo0am1QaFZKTDE4XC9BQUFBQUFBQUFBSVwvQUFBQUFBQUFBQUFcL0FDSGkzcmQ2R1FqZXdQV3Zra2RRVmJ5WGF1QlZCbE0tUVFcL3Bob3RvLmpwZyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTAyMTYxODkzNjEwNTEzODkwNzMzIiwiZmFtaWx5X25hbWUiOiJWIn0="
+    "X-Userinfo": "eyJuaWNrbmFtZSI6ImF2aXNiaXJkIiwiaWQiOiJnb29nbGUtb2F1dGgyfDEwMjE2MTg5MzYxMDUxMzg5MDczMyIsImxvY2FsZSI6ImVuIiwiaHR0cHM6XC9cL2V4YW1wbGUuY29tXC9mYXZvcml0ZV9jb2xvciI6ImJsdWUiLCJnaXZlbl9uYW1lIjoiVnlhY2hlc2xhdiIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTAyMTYxODkzNjEwNTEzODkwNzMzIiwiaHR0cHM6XC9cL2V4YW1wbGUuY29tXC95b3VyY3VzdG9tYXR0cnMiOnsib2JqZWN0YXR0cjIiOiJvYmplY3R2YWx1ZTIiLCJvYmplY3RhdHRyMyI6Im9iamVjdHZhbHVlMyIsIm9iamVjdGF0dHIxIjoib2JqZWN0dmFsdWUxIn0sImZhbWlseV9uYW1lIjoiViIsInBpY3R1cmUiOiJodHRwczpcL1wvbGg0Lmdvb2dsZXVzZXJjb250ZW50LmNvbVwvLXo0am1QaFZKTDE4XC9BQUFBQUFBQUFBSVwvQUFBQUFBQUFBQUFcL0FLRjA1bkNQNl9NLUVvQlItWVRWZV9tTlhrQVZhUEUxS3dcL3Bob3RvLmpwZyIsInVwZGF0ZWRfYXQiOiIyMDIwLTAzLTA5VDEyOjU3OjIyLjA4MVoiLCJuYW1lIjoiVnlhY2hlc2xhdiBWIn0="
   },
   "origin": "172.20.0.1, 172.20.0.1",
   "url": "https://app.lvh.voronenko.net/get"
@@ -163,31 +294,43 @@ Upon successful login we are redirected back to kong, and now
 As we see, now user is authorized to use or API in kong, and `oidc` plugin
 also adds special header called `X-Userinfo`, which contains base64 encoded jwt token. At the same moment, plugin performs validation of the token signature, and also can be configured to do more background checks.
 
-You can use https://jwt.io/ to view token insides
+You can decode base64 decode to view token data insides, pay attention to presence of the custom attributes.
 
 ```
 {
   "nickname": "avisbird",
   "id": "google-oauth2|102161893610513890733",
   "locale": "en",
-  "name": "Vyacheslav V",
-  "email": "someemail",
+  "https://example.com/favorite_color": "blue",
   "given_name": "Vyacheslav",
-  "updated_at": "2019-12-05T20:55:21.058Z",
-  "email_verified": true,
-  "picture": "https://lh4.googleusercontent.com/-z4jmPhVJL18/AAAAAAAAAAI/AAAAAAAAAAA/ACHi3rd6GQjewPWvkkdQVbyXauBVBlM-QQ/photo.jpg",
   "sub": "google-oauth2|102161893610513890733",
-  "family_name": "V"
+  "https://example.com/yourcustomattrs": {
+    "objectattr2": "objectvalue2",
+    "objectattr3": "objectvalue3",
+    "objectattr1": "objectvalue1"
+  },
+  "family_name": "V",
+  "picture": "https://lh4.googleusercontent.com/-z4jmPhVJL18/AAAAAAAAAAI/AAAAAAAAAAA/AKF05nCP6_M-EoBR-YTVe_mNXkAVaPE1Kw/photo.jpg",
+  "updated_at": "2020-03-09T12:57:22.081Z",
+  "name": "Vyacheslav V"
 }
 ```
 
-And the same information can be now extracted by next plugin in chain or 
+The same does your code serverside in a microservice or any next plugin in a chain and performs necessary actions basing on information received.
+
+So with kong oidc plugin flow looks like
+
+![image from kong oidc docs](docs/08_kong_oidc_flow.png)
+
+
+Some interesting discussion can be also found on  https://github.com/nokia/kong-oidc/issues/15
+
+
+And the same information can be now extracted by next plugin in chain or
 end service.
 
 Note, that there is some mess with rules and hooks, as discussed in that thread
 https://community.auth0.com/t/custom-claims-not-added-to-access-token-despite-rule/9460/19
-
-
 
 https://auth0.com/docs/api-auth/tutorials/client-credentials/customize-with-hooks
 

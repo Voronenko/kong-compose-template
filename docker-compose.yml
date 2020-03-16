@@ -124,7 +124,7 @@ services:
   #######################################
   konga:
     image: pantsel/konga:next
-    restart: always
+    restart: on-failure
     networks:
         - kong-net
     environment:
