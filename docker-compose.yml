@@ -8,7 +8,7 @@ networks:
 
 services:
   kong-migrations:
-    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.4.0-ubuntu}"
+    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.5.0-ubuntu}"
     command: kong migrations bootstrap
     depends_on:
       db:
@@ -24,7 +24,7 @@ services:
     restart: on-failure
 
   kong-migrations-up:
-    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.4.0-ubuntu}"
+    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.5.0-ubuntu}"
     command: kong migrations up && kong migrations finish
     depends_on:
       db:
@@ -40,7 +40,7 @@ services:
     restart: on-failure
 
   kong:
-    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.4.0-ubuntu}"
+    image: "${KONG_DOCKER_TAG:-voronenko/kong:1.5.0-ubuntu}"
     user: "${KONG_USER:-root}"
     depends_on:
       db:
