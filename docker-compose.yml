@@ -9,7 +9,7 @@ networks:
 services:
   kong-migrations:
     image: "${KONG_DOCKER_TAG:-voronenko/kong:2.0.2-ubuntu}"
-    command: kong migrations bootstrap
+    command: kong migrations bootstrap && kong migrations finish
     depends_on:
       db:
         condition: service_healthy
@@ -64,6 +64,7 @@ services:
       KONG_CASSANDRA_CONTACT_POINTS: db
 
       KONG_PLUGINS: "bundled,oidc"
+#,myplugin"
       KONG_LOG_LEVEL: debug
     networks:
       - kong-net
@@ -78,6 +79,8 @@ services:
       timeout: 10s
       retries: 10
     restart: on-failure
+#    volumes:
+#      - kong-plugin-myplugin:/usr/local/lib/luarocks/rocks-5.1/kong-plugin-myplugin
 
   db:
     image: postgres:9.5

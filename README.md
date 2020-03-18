@@ -595,3 +595,7 @@ In example above, `"iss": "https://voronenko.auth0.com/"` matches
 to key attribute of the jwt key.
 
 ![alt](docs/07_kong_auth0_consumer_jwt_key.png)
+
+### Developing your own kong plugins with lua
+
+See https://github.com/Kong/kong-plugin for ideas
