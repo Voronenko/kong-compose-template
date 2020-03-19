@@ -20,7 +20,7 @@ Kong's documentation can be found at [https://docs.konghq.com/][kong-docs-url].
 
 Additionally, compose file contains kong ui, sa called konga https://github.com/pantsel/konga,  available at port 1337
 
-For Konga you can use some admin name (kind of Slavko / KongaKong) with unique connection name kongakompose and admin endpoint
+For Konga you can use some admin name (kind of slavko / KongaKong) with unique connection name kongakompose and admin endpoint
 http://kong:8001/
 
 # Introduction

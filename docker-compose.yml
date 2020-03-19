@@ -63,7 +63,7 @@ services:
 
       KONG_CASSANDRA_CONTACT_POINTS: db
 
-      KONG_PLUGINS: "bundled,oidc"
+      KONG_PLUGINS: "bundled,oidc,sa-jwt-claims-validate"
 #,myplugin"
       KONG_LOG_LEVEL: debug
     networks:
@@ -105,7 +105,7 @@ services:
   # Konga database prepare
   #######################################
   konga-prepare:
-    image: pantsel/konga:next
+    image: pantsel/konga:latest
     command: "-c prepare -a postgres -u postgresql://${KONG_PG_USER:-kong}:${KONG_PG_PASSWORD:-kong}@db:5432/${KONG_PG_DATABASE:-kong}"
     environment:
       DB_ADAPTER: postgres
@@ -114,19 +114,22 @@ services:
       DB_PASSWORD: ${KONG_PG_PASSWORD:-kong}
       DB_DATABASE: ${KONG_PG_DATABASE:-kong}
       NODE_ENV: production
+      KONGA_SEED_USER_DATA_SOURCE_FILE: /tmp/konga-bootstrap/users.js
+    volumes:
+      - ./konga:/tmp/konga-bootstrsap:ro
     networks:
       - kong-net
     restart: on-failure
     links:
       - db
     depends_on:
-      - db
-
+      db:
+        condition: service_healthy
   #######################################
   # Konga: Kong GUI
   #######################################
   konga:
-    image: pantsel/konga:next
+    image: pantsel/konga:latest
     restart: on-failure
     networks:
         - kong-net
@@ -137,7 +140,12 @@ services:
       DB_PASSWORD: ${KONG_PG_PASSWORD:-kong}
       DB_DATABASE: ${KONG_PG_DATABASE:-kong}
       NODE_ENV: production
+      KONGA_SEED_USER_DATA_SOURCE_FILE: /tmp/konga-bootstrap/users.js
+    volumes:
+      - ./konga:/tmp/konga-bootstrsap:ro
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
     ports:
       - "1337:1337"
