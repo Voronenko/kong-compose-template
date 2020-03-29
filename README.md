@@ -74,7 +74,7 @@ RUN luarocks install kong-oidc
 
 On Auth0 interface lets create SPA application.
 
-![alt](docs/00_auth0_spa_app.png)
+![alt](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/00_auth0_spa_app.png)
 
 For further ideas, check advanced settings, and ensure that you can add up to 10 255 byte long custom value pairs, that will be later passed to your api behind kong.
 
@@ -256,18 +256,18 @@ curl -i -X POST \
 
 If you check documentations of the plugins, you will note that it has number of customizations, that allows to redirect to proper pages of your main portal after login and so on.
 
-![alt](docs/03_oidc_service.png)
+![alt](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/03_oidc_service.png)
 
 Additionally, we need to inform auth0 about callbacks used. If your application
 does not have own, kong can provide default ones, which would reside under
 `/cb`
 
-![alt](docs/04_allowed_callback_urls.png)
+![alt](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/04_allowed_callback_urls.png)
 
 Now, if you would try to navigate to `{{ domain_endpoint }}/spa/`, you will get
 redirected to auth0, where you can login with credentials given, including social logins.
 
-![alt](docs/05_auth0_login_ui.png)
+![alt](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/05_auth0_login_ui.png)
 
 Upon successful login we are redirected back to kong, and now
 
@@ -320,7 +320,7 @@ The same does your code serverside in a microservice or any next plugin in a cha
 
 So with kong oidc plugin flow looks like
 
-![image from kong oidc docs](docs/08_kong_oidc_flow.png)
+![image from kong oidc docs](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/08_kong_oidc_flow.png)
 
 
 Some interesting discussion can be also found on  https://github.com/nokia/kong-oidc/issues/15
@@ -397,7 +397,7 @@ curl -i -X POST \
   --data "username={{auth0consumer}}&custom_id=someid2"
 ```
 
-![alt](docs/06_kong_auth0_consumer.png)
+![alt](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/06_kong_auth0_consumer.png)
 
 and specify `jwt` method of the authentication for him:
 
@@ -412,7 +412,7 @@ curl -i -X POST http://localhost:8001/consumers/${CONSUMERNAME}/jwt \
     -F "key=https://${COMPANYNAME}.auth0.com/"
 ```
 
-![alt](docs/07_kong_auth0_consumer_jwt_key.png)
+![alt](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/07_kong_auth0_consumer_jwt_key.png)
 
 At that moment we are ready to consume our api behind kong.
 
@@ -594,7 +594,7 @@ should match to key field of the jwt token
 In example above, `"iss": "https://voronenko.auth0.com/"` matches
 to key attribute of the jwt key.
 
-![alt](docs/07_kong_auth0_consumer_jwt_key.png)
+![alt](https://raw.githubusercontent.com/Voronenko/kong-compose-template/master/docs/07_kong_auth0_consumer_jwt_key.png)
 
 ## What's next?
 
