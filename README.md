@@ -596,6 +596,50 @@ to key attribute of the jwt key.
 
 ![alt](docs/07_kong_auth0_consumer_jwt_key.png)
 
-### Developing your own kong plugins with lua
+## What's next?
 
-See https://github.com/Kong/kong-plugin for ideas
+If you start with kong with auth0, you will note, that in number of situations you would not be able to find flow of plugins
+that ideally suits your needs. Fortunately that is not a dead lock, as you always can write your own kong plugin -
+and this task is not so hard
+
+### Own plugin first steps
+
+First step you need is to follow good boilerplate. Current recommended boilerplate for kong plugin can be found at https://github.com/Kong/kong-plugin where you can look for ideas
+
+### Own plugin implementation
+
+Per my experince - success key with kong plugin development - is strict test driven development, and addressing all compiler warnings.
+Take a look on a https://github.com/Voronenko/kong-plugin-sa-jwt-claims-validate plugin as an example - which was implemented to accomplish
+specific jwt token data validations and thus offload microservices behind.
+
+Usual plugin is compact: ig could consists just of two files - schema.lua , which describes "configuration" contract for the plugin. You can keep validations simple while you are the only consumer of the plugin, but per my experience you would like to invest more efforts into configuration validation once you start targeting wider audience. Reasoning is that it is harder troubleshouting of misbehaved plugin in a production environment, if plugin fails on a configuration (consumer provides wrong configuration options, but that is not handled by schema validations), it could be also not clearly seen in kong logs.
+
+Second file is handler.lua - you would need to implement few hooks according to your plugin logic. Important parts to pay attention to:
+
+plugin priority - as it controls order of your plugin execution in chain of other plugins during the request processing
+
+```
+local plugin = {
+  PRIORITY = 1000, -- set the plugin priority, which determines plugin execution order
+  ....
+}
+```
+
+and access callback, which is the one that will be implemented in every custom plugin.
+
+```
+---[[ runs in the 'access_by_lua_block'
+function plugin:access(plugin_conf)
+
+  -- your custom code here
+  kong.log.inspect(plugin_conf)   -- check the logs for a pretty-printed config!
+  ngx.req.set_header(plugin_conf.request_header, "this is on a request")
+
+end --]]
+
+```
+
+During callbacks implementation, pay attention to scope of the variables in lua - accidental exposing variable globally might lead
+to unexpected issues during concurrent calls. You might also want to introduce detailed logging activated using plugin configuration.
+
+By that moment it is the end for the introduction with Auth0 , kong and your custom plugin. Good luck in your journey

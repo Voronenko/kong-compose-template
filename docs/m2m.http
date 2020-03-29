@@ -100,3 +100,23 @@ authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6IlF6bEZOak5CUm
 
 GET {{domain_endpoint}}/spa/
 authorization: Bearer {{accessToken}}
+
+
+#####################################################3
+
+# Protecting with sa-jwt-claims-validate
+
+### Activate sa-jwt-claims-validate plugin for service
+POST {{kong}}/services/{{ m2mservice_name }}/plugins/ HTTP/1.1
+content-type: application/json
+
+{
+       "name": "sa-jwt-claims-validate",
+       "config": {
+         "claims": {
+             "iss": "https://voronenko.auth0.com/",
+             "https://foo.com/claim": "barr"
+         }
+       }
+}
+
